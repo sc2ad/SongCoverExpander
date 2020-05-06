@@ -21,7 +21,8 @@ Color c{
     c.g = 0.0f,
     c.a = 0.5f
 };
- 
+
+// All rugt
 Il2CppObject* FindObjectsOfTypeAllFirstOrDefault(Il2CppReflectionType* Type)
 {
     Array<Il2CppObject*>* Objects = *RunMethod<Array<Il2CppObject*>*>(GetClassFromName("UnityEngine","Resources"), "FindObjectsOfTypeAll", Type);
@@ -30,7 +31,8 @@ Il2CppObject* FindObjectsOfTypeAllFirstOrDefault(Il2CppReflectionType* Type)
     else
         return nullptr;
 }
- 
+
+// All rugt
 MAKE_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, void, Scene previousActiveScene, Scene newActiveScene)
 {  
     Internal_ActiveSceneChanged(previousActiveScene, newActiveScene);
@@ -62,7 +64,7 @@ MAKE_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, void, Scene previousActiveScen
 }
  
  
- 
+// ME POGCHAMP
 MAKE_HOOK_OFFSETLESS(HandleMainMenuViewControllerDidFinish, void, Il2CppObject* self, Il2CppObject* viewController, int subMenuType){
    
     Il2CppObject* sldv = FindObjectsOfTypeAllFirstOrDefault(GetSystemType("", "StandardLevelDetailView"));
