@@ -1,9 +1,9 @@
 #include "../include/main.hpp"
-
+ 
 using namespace il2cpp_utils;
  
 bool MenuSceneLoadedFresh = false;
-
+ 
  
 Vector3 coverPos;
 Vector3 coverScale = {1.0f, 1.0f, 1.0f};
@@ -24,53 +24,53 @@ Color c{
  
 Il2CppObject* FindObjectsOfTypeAllFirstOrDefault(Il2CppReflectionType* Type)
 {
-    Array<Il2CppObject*>* Objects = *RunMethod<Array<Il2CppObject*>*>(GetClassFromName("UnityEngine","Resources"), "FindObjectsOfTypeAll", Type); 
+    Array<Il2CppObject*>* Objects = *RunMethod<Array<Il2CppObject*>*>(GetClassFromName("UnityEngine","Resources"), "FindObjectsOfTypeAll", Type);
     if(Objects)
         return Objects->values[0];
     else
         return nullptr;
 }
-
+ 
 MAKE_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, void, Scene previousActiveScene, Scene newActiveScene)
 {  
     Internal_ActiveSceneChanged(previousActiveScene, newActiveScene);
     std::string Menu = "MenuViewControllers";
     std::string EmptyTransition = "EmptyTransition";
-
+ 
     Il2CppString* previousScene = *RunMethod<Il2CppString*>("UnityEngine.SceneManagement", "Scene", "GetNameInternal", previousActiveScene.m_Handle);
     if(previousScene == nullptr)
         return;
-    
+   
     std::string previousSceneStr  = to_utf8(csstrtostr(previousScene));
     Il2CppString* activeScene = *RunMethod<Il2CppString*>("UnityEngine.SceneManagement", "Scene", "GetNameInternal", newActiveScene.m_Handle);
     if(activeScene == nullptr)
         return;
-    
+   
     std::string activeSceneStr  = to_utf8(csstrtostr(activeScene));
-
+ 
     if(activeSceneStr == Menu)
     {
         if(previousSceneStr == EmptyTransition)
         {
             MenuSceneLoadedFresh = true;
-        } else 
+        } else
         {
            MenuSceneLoadedFresh = false;
         }
     }
-    
+   
 }
-
-
-
+ 
+ 
+ 
 MAKE_HOOK_OFFSETLESS(HandleMainMenuViewControllerDidFinish, void, Il2CppObject* self, Il2CppObject* viewController, int subMenuType){
-    
+   
     Il2CppObject* sldv = FindObjectsOfTypeAllFirstOrDefault(GetSystemType("", "StandardLevelDetailView"));
-
+ 
     HandleMainMenuViewControllerDidFinish(self, viewController, subMenuType);
     if(MenuSceneLoadedFresh == false)
         return;
-
+ 
     Il2CppObject* cover = *GetFieldValue(sldv, "_coverImage");
     Il2CppObject* bdscc = *GetFieldValue(sldv, "_beatmapDifficultySegmentedControlController");
    
@@ -120,7 +120,7 @@ MAKE_HOOK_OFFSETLESS(HandleMainMenuViewControllerDidFinish, void, Il2CppObject* 
     RunMethod(playerStatsContainerLayoutTransform, "set_localPosition", newlocalpos);
    
     RunMethod(parentLayout, "set_preferredHeight", 60.0f);
-   
+    MenuSceneLoadedFresh = false;
 }
  
 extern "C" void load() {
