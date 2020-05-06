@@ -34,19 +34,19 @@ Il2CppObject* FindObjectsOfTypeAllFirstOrDefault(Il2CppReflectionType* Type)
 MAKE_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, void, Scene previousActiveScene, Scene newActiveScene)
 {  
     Internal_ActiveSceneChanged(previousActiveScene, newActiveScene);
-    string Menu = "MenuViewControllers";
-    string EmptyTransition = "EmptyTransition";
+    std::string Menu = "MenuViewControllers";
+    std::string EmptyTransition = "EmptyTransition";
 
     Il2CppString* previousScene = *RunMethod<Il2CppString*>("UnityEngine.SceneManagement", "Scene", "GetNameInternal", previousActiveScene.m_Handle);
     if(previousScene == nullptr)
         return;
     
-    string previousSceneStr  = to_utf8(csstrtostr(previousScene));
+    std::string previousSceneStr  = to_utf8(csstrtostr(previousScene));
     Il2CppString* activeScene = *RunMethod<Il2CppString*>("UnityEngine.SceneManagement", "Scene", "GetNameInternal", newActiveScene.m_Handle);
     if(activeScene == nullptr)
         return;
     
-    string activeSceneStr  = to_utf8(csstrtostr(activeScene));
+    std::string activeSceneStr  = to_utf8(csstrtostr(activeScene));
 
     if(activeSceneStr == Menu)
     {
