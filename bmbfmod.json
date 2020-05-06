@@ -1,0 +1,25 @@
+{
+    "id": "SongCoverExpander",
+    "name": "Song Cover Expander",
+    "author": "L_",
+    "description": [
+        
+        "Makes thing big."
+        
+    ],
+    "category": "Gameplay",
+    "gameVersion": "1.9.0",
+    "version": "0.1.0",
+    "platform": "Quest",
+    "components": [
+        {
+            "type": "HookMod",
+            "installAction": {
+                "installLibraryFile": "libsongcoverexpander.so"
+            },
+            "uninstallAction": {
+                "removeLibraryFile": "libsongcoverexpander.so"
+            }
+        }
+    ]
+}
