@@ -1,351 +1,348 @@
 #ifndef UTILS_H_INCLUDED
 #define UTILS_H_INCLUDED
 
-#if __has_include(<string_view>)
+#ifdef __cplusplus
+
+// Code courtesy of DaNike
+template<typename TRet, typename ...TArgs>
+using function_ptr_t = TRet(*)(TArgs...);
+
+#include "../libil2cpp/il2cpp-config-api.h"
+#include "../libil2cpp/il2cpp-api.h"
+#include "../libil2cpp/il2cpp-api-types.h"
+#include "../libil2cpp/il2cpp-class-internals.h"
+// #include "../libil2cpp/il2cpp-api-functions.h"
+
+// Taken from: https://github.com/nike4613/BeatMods2/blob/master/BeatMods2/include/util/json.h
+#ifndef UTIL_JSON_H
+#define UTIL_JSON_H
+
+#define RAPIDJSON_HAS_STDSTRING 1
+
+#include <type_traits>
+#include "../../rapidjson/include/rapidjson/document.h"
+#include "../../rapidjson/include/rapidjson/prettywriter.h"
+#include "../../rapidjson/include/rapidjson/encodings.h"
+#include "../../rapidjson/include/rapidjson/reader.h"
+#include "../../rapidjson/include/rapidjson/writer.h"
+#include "../../rapidjson/include/rapidjson/istreamwrapper.h"
+#include "../../rapidjson/include/rapidjson/ostreamwrapper.h"
+#include <string>
 #include <string_view>
-#elif __has_include(<experimental/string_view>)
-#include <experimental/string_view>
-namespace std {
-    using experimental::string_view;
-    using experimental::basic_string_view;
-    using experimental::u16string_view;
+#include <cassert>
+
+
+namespace Configuration {
+    // Provides a class for configuration.
+    // You are responsible for Loading and Writing to it as necessary.
+    class Config {
+        public:
+            Config();
+            rapidjson::Document document;
+            // Loads Config
+            static Config Load();
+            // Writes Config
+            void Write();
+    };
 }
-#else
-#error No string_view implementation available!
-#endif
-#include <thread>
-#include <optional>
 
-// For use in SAFE_ABORT/CRASH_UNLESS (& RET_UNLESS if possible)
-#if __has_include(<source_location>)
-#error please alert sc2ad/beatsaber-hook that "std::source_location is live" (sharing your Android NDK version) then comment this out!
-#elif __has_include(<experimental/source_location>)
-#error please alert sc2ad/beatsaber-hook that "std::experimental::source_location is live" (sharing your Android NDK version) then comment this out!
-#endif
+namespace json {
+    
+    enum class Endianness {
+        Big, Little, Default, Network = Big
+    };
 
-// For use in ClassOrInstance concept
-#if __has_include(<concepts>)
-#error please alert sc2ad/beatsaber-hook that "std::concepts are live" (sharing your Android NDK version) then comment this out!
-#elif __has_include(<experimental/concepts>)
-#error please alert sc2ad/beatsaber-hook that "std::experimental::concepts are live" (sharing your Android NDK version) then comment this out!
-#endif
+    template<typename T> struct sfinae_fail {};
 
-template <typename Container> struct is_vector : std::false_type { };
-template <typename... Ts> struct is_vector<std::vector<Ts...> > : std::true_type { };
-// TODO: figure out how to write an is_vector_v that compiles properly?
+    template<typename, Endianness = Endianness::Default, bool BOM = false> struct encoding_for_char_t;
+    template<typename Ch, Endianness E>
+    struct encoding_for_char_t<Ch, E, false> {
+        static_assert(std::is_integral<Ch>::value);
+        static constexpr int size = sizeof(Ch);
+        using type = 
+            std::conditional<size == 1, rapidjson::UTF8<Ch>,
+            std::conditional<size == 2, rapidjson::UTF16<Ch>,
+            std::conditional<size == 4, rapidjson::UTF32<Ch>,
+            sfinae_fail<Ch>>>>;
+    };
+    template<typename Ch>
+    struct encoding_for_char_t<Ch, Endianness::Default, true> {
+        static_assert(std::is_integral<Ch>::value);
+        using type = typename encoding_for_char_t<Ch, Endianness::Default, false>::type;
+    };
+    template<typename Ch>
+    struct encoding_for_char_t<Ch, Endianness::Big, true> {
+        static_assert(std::is_integral<Ch>::value);
+        static constexpr int size = sizeof(Ch);
+        using type =
+            std::conditional<size == 1, rapidjson::UTF8<Ch>,
+            std::conditional<size == 2, rapidjson::UTF16BE<Ch>,
+            std::conditional<size == 4, rapidjson::UTF32BE<Ch>,
+            sfinae_fail<Ch>>>>;
+    };
+    template<typename Ch>
+    struct encoding_for_char_t<Ch, Endianness::Little, true> {
+        static_assert(std::is_integral<Ch>::value);
+        static constexpr int size = sizeof(Ch);
+        using type =
+            std::conditional<size == 1, rapidjson::UTF8<Ch>,
+            std::conditional<size == 2, rapidjson::UTF16LE<Ch>,
+            std::conditional<size == 4, rapidjson::UTF32LE<Ch>,
+            sfinae_fail<Ch>>>>;
+    };
 
-#define MACRO_WRAP(expr) do { \
-    expr; \
-} while(0)
+    template<typename Ch, Endianness E = Endianness::Default, bool BOM = false>
+    using encoding_for_char = typename encoding_for_char_t<Ch, E, BOM>::type;
 
-template <class, template <class, class...> class>
-struct is_instance : public std::false_type {};
-
-template <class...Ts, template <class, class...> class U>
-struct is_instance<U<Ts...>, U> : public std::true_type {};
-
-template<class T>
-auto&& unwrap_optionals(T&& arg) {
-    if constexpr (is_instance<std::decay_t<T>, std::optional>::value) {
-        return *arg;
-    } else {
-        return arg;
+    template<typename Ch = char, typename Allocator = rapidjson::MemoryPoolAllocator<>>
+    std::basic_string_view<Ch> get_string(rapidjson::GenericValue<encoding_for_char<Ch>, Allocator> const& value)
+    {
+        assert(value.IsString());
+        return {value.GetString(), value.GetStringLength()};
     }
 }
 
-// >>>>>>>>>>>>>>>>> DO NOT NEST X_UNLESS MACROS <<<<<<<<<<<<<<<<<
-// Prefer RunMethod.value_or to a nested X_UNLESS(RunMethod)
+namespace il2cpp_utils {
+    // Returns the first matching class from the given namespace and typeName by searching through all assemblies that are loaded.
+    inline Il2CppClass* GetClassFromName(const char* nameSpace, const char* typeName) {
+        size_t assemb_count;
+        const Il2CppAssembly** allAssemb = il2cpp_domain_get_assemblies(il2cpp_domain_get(), &assemb_count);
 
-// Logs error and RETURNS argument 1 IFF argument 2 boolean evaluates as false; else EVALUATES to argument 2
-// thank god for this GCC ({}) extension which "evaluates to the last statement"
-#ifndef SUPPRESS_MACRO_LOGS
-#define RET_UNLESS(retval, expr) ({ \
-    auto&& __temp__ = (expr); \
-    if (!__temp__) { \
-        Logger::get().error("%s (in %s at %s:%i) returned false!", #expr, __PRETTY_FUNCTION__, __FILE__, __LINE__); \
-        return retval; \
-    } \
-    unwrap_optionals(__temp__); })
-#else
-#define RET_UNLESS(retval, expr) ({ \
-    auto&& __temp__ = (expr); \
-    if (!__temp__) { \
-        return retval; \
-    } \
-    unwrap_optionals(__temp__); })
+        for (int i = 0; i < assemb_count; i++) {
+            auto assemb = allAssemb[i];
+            auto img = il2cpp_assembly_get_image(assemb);
+            auto klass = il2cpp_class_from_name(img, nameSpace, typeName);
+            if (klass) {
+                return klass;
+            }
+        }
+        return NULL;
+    }
+    template<typename TObj, typename... TArgs>
+    inline TObj* New(Il2CppClass* klass, TArgs* ...args) {
+        void* invoke_params[] = {(reinterpret_cast<void*>(args), ...)};
+        // object_new call
+        auto obj = il2cpp_object_new(klass);
+        // runtime_invoke constructor with right number of args, return null if multiple matches (or take a vector of type pointers to resolve it), return null if constructor errors
+        void* myIter = nullptr;
+        const MethodInfo* current;
+        const MethodInfo* ctor = nullptr;
+        constexpr auto count = sizeof...(TArgs);
+        auto argarr = {args...};
+        while ((current = il2cpp_class_get_methods(klass, &myIter))) {
+            if (ctor->parameters_count != count + 1) {
+                continue;
+            }
+            // Start at 1 to ignore 'self' param
+            for (int i = 1; i < current->parameters_count; i++) {
+                if (!il2cpp_type_equals(current->parameters[i].parameter_type, argarr[i - 1])) {
+                    goto next_method;
+                }
+            }
+            ctor = current;
+            next_method: continue;
+        }
+        if (!ctor) {
+            return nullptr;
+        }
+        Il2CppException* exp = nullptr;
+        il2cpp_runtime_invoke(ctor, obj, invoke_params, &exp);
+        if (exp) {
+            return nullptr;
+        }
+        return reinterpret_cast<TObj*>(obj);
+    }
+}
+
 #endif
-
-#define RET_V_UNLESS(expr) RET_UNLESS(, expr)
-#define RET_0_UNLESS(expr) RET_UNLESS(0, expr)
-#define RET_NULLOPT_UNLESS(expr) RET_UNLESS(std::nullopt, expr)
-
-// Produces a has_[member]<T, U> type trait whose ::value tells you whether T has a member named [member] with type U.
-#define DEFINE_MEMBER_CHECKER(member) \
-    template<typename T, typename U, typename Enable = void> \
-    struct has_ ## member : std::false_type { }; \
-    template<typename T, typename U> \
-    struct has_ ## member<T, U, \
-        typename std::enable_if_t< \
-            std::is_same_v<decltype(T::member), U>> \
-        > : std::true_type { };
-
-// For use in fire-if-compiled asserts e.g. static_assert(false_t<T>, "message")
-template <class...> constexpr std::false_type false_t{};
-
-#include "utils-functions.h"
-#include "../inline-hook/And64InlineHook.hpp"
-#include "logging.hpp"
-
-#ifdef __cplusplus
-
-template <typename Function, typename... Args>
-static void StartCoroutine(Function&& fun, Args&&... args) {
-    auto t = new std::thread(std::forward<Function>(fun), std::forward<Args>(args)...);
-    t->detach();
-}
-
-// logs the function, file and line, sleeps to allow logs to flush, then terminates program
-void safeAbort(const char* func, const char* file, int line);
-// sets "file" and "line" to the file and line you call this macro from
-#ifndef SUPPRESS_MACRO_LOGS
-#define SAFE_ABORT() safeAbort(__PRETTY_FUNCTION__, __FILE__, __LINE__)
-#else
-#define SAFE_ABORT() safeAbort("undefined_function", "undefined_file", -1)
-#endif
-
-template<class T>
-auto crashUnless(T&& arg, const char* func, const char* file, int line) {
-    if (!arg) safeAbort(func, file, line);
-    return unwrap_optionals(arg);
-}
-#ifndef SUPPRESS_MACRO_LOGS
-#define CRASH_UNLESS(expr) crashUnless(expr, __PRETTY_FUNCTION__, __FILE__, __LINE__)
-#else
-#define CRASH_UNLESS(expr) crashUnless(expr, "undefined_function", "undefined_file", -1)
-#endif
-
-template<class T>
-intptr_t getBase(T pc) {
-    static_assert(sizeof(T) >= sizeof(void*));
-    Dl_info info;
-    RET_0_UNLESS(dladdr((void*)pc, &info));
-    return (intptr_t)info.dli_fbase;
-}
-
-template<class T>
-ptrdiff_t asOffset(T pc) {
-    auto base = getBase(pc);
-    return (ptrdiff_t)(((intptr_t)pc) - base);
-}
-
-// function_ptr_t courtesy of DaNike
-template<typename TRet, typename ...TArgs>
-// A generic function pointer, which can be called with and set to a `getRealOffset` call
-using function_ptr_t = TRet(*)(TArgs...);
-
-// Yoinked from: https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
-// TODO: This should be removed once std::format exists
-template<typename... TArgs>
-std::string string_format(const std::string_view format, TArgs ... args)
-{
-    size_t size = snprintf(nullptr, 0, format.data(), args ...) + 1; // Extra space for '\0'
-    if (size <= 0)
-        return "";
-    std::unique_ptr<char[]> buf(new char[size]); 
-    snprintf(buf.get(), size, format.data(), args...);
-    return std::string(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
-}
 
 extern "C" {
-#endif /* __cplusplus */
+#endif
 
-// Creates all directories for a provided file_path
-// Ex: /sdcard/Android/data/something/files/libs/
-int mkpath(char* file_path, mode_t mode);
+// Code courtesy of MichaelZoller
 
-// Restores an existing stringstream to a newly created state.
-void resetSS(std::stringstream& ss);
-// Prints the given number of "tabs" as spaces to the given output stream.
-void tabs(std::ostream& os, int tabs, int spacesPerTab = 2);
-// Logs the given stringstream and clears it.
-void print(std::stringstream& ss, Logging::Level lvl = Logging::INFO);
+// A C# object
+struct Object {
+    #ifdef __cplusplus
+    Il2CppClass* klass;  // pointer to the class object, which starts with VTable
+    #else
+    void* klass;
+    #endif
+    void* monitorData;  // pointer to a MonitorData object, used for thread sync
+};
 
-// Attempts to print what is stored at the given pointer.
-// For a given pointer, it will scan 4 void*'s worth of bytes at the location pointed to.
-// For each void* of bytes, it will print the raw bytes and interpretations of the bytes as ints and char*s.
-// When the bytes look like a valid pointer, it will attempt to follow that pointer, increasing the indentation.
-//   It will not follow pointers that it has already analyzed as a result of the current call.
-void analyzeBytes(const void* ptr);
-
-intptr_t getRealOffset(const void* offset);
-intptr_t baseAddr(const char* soname);
-
-// Only wildcard is ? and ?? - both are handled the same way. They will skip exactly 1 byte (2 hex digits)
-intptr_t findPattern(intptr_t dwAddress, const char* pattern, intptr_t dwSearchRangeLen = 0x1000000);
-// Same as findPattern but will continue scanning to make sure your pattern is sufficiently specific.
-// Each candidate will be logged. label should describe what you're looking for, like "Class::Init".
-// Sets "multiple" iff multiple matches are found, and outputs a log warning message.
-// Returns the first match, if any.
-intptr_t findUniquePattern(bool& multiple, intptr_t dwAddress, const char* pattern, const char* label = 0, intptr_t dwSearchRangeLen = 0x1000000);
-
-#define MAKE_HOOK(name, addr, retval, ...) \
-void* addr_ ## name = (void*) addr; \
-retval (*name)(__VA_ARGS__) = NULL; \
-retval hook_ ## name(__VA_ARGS__)
-
-#define MAKE_HOOK_OFFSETLESS(name, retval, ...) \
-retval (*name)(__VA_ARGS__) = NULL; \
-retval hook_ ## name(__VA_ARGS__)
-
-#define MAKE_HOOK_NAT(name, addr, retval, ...) \
-void* addr_ ## name = (void*) addr; \
-retval (*name)(__VA_ARGS__) = NULL; \
-retval hook_ ## name(__VA_ARGS__)
-
-#ifndef SUPPRESS_MACRO_LOGS
-
-#ifdef __aarch64__
-
-#define INSTALL_HOOK(name) MACRO_WRAP( \
-Logger::get().info("Installing 64 bit hook: %s", #name); \
-A64HookFunction((void*)getRealOffset(addr_ ## name),(void*) hook_ ## name, (void**)&name); \
-)
-
-#define INSTALL_HOOK_OFFSETLESS(name, methodInfo) MACRO_WRAP( \
-Logger::get().info("Installing 64 bit offsetless hook: %s at %lX", #name, asOffset(methodInfo->methodPointer)); \
-A64HookFunction((void*)methodInfo->methodPointer,(void*) hook_ ## name, (void**)&name); \
-)
-
-#define INSTALL_HOOK_NAT(name) MACRO_WRAP( \
-Logger::get().info("Installing 64 bit native hook: %s", #name); \
-A64HookFunction((void*)(addr_ ## name),(void*) hook_ ## name, (void**)&name); \
-)
-
-#define INSTALL_HOOK_DIRECT(name, addr) MACRO_WRAP( \
-Logger::get().info("Installing 64 bit direct hook: %s", #name); \
-A64HookFunction((void*)addr, (void*) hook_ ## name, (void**)&name); \
-)
-
-// Uninstalls currently just creates a hook at the hooked address
-// and sets the hook to call the original function
-// No original trampoline is created when uninstalling a hook, hence the nullptr
-
-#define UNINSTALL_HOOK(name) MACRO_WRAP( \
-Logger::get().info("Uninstalling 64 bit hook: %s", #name); \
-A64HookFunction((void*)getRealOffset(addr_ ## name),(void*)name, (void**)nullptr); \
-)
-
-#define UNINSTALL_HOOK_OFFSETLESS(name, methodInfo) MACRO_WRAP( \
-Logger::get().info("Uninstalling 64 bit offsetless hook: %s at %lX", #name, asOffset(methodInfo->methodPointer)); \
-A64HookFunction((void*)methodInfo->methodPointer,(void*)name, (void**)nullptr); \
-)
-
-#define UNINSTALL_HOOK_NAT(name) MACRO_WRAP( \
-Logger::get().info("Uninstalling 64 bit native hook: %s", #name); \
-A64HookFunction((void*)(addr_ ## name),(void*)name, (void**)nullptr); \
-)
-
-#define UNINSTALL_HOOK_DIRECT(name, addr) MACRO_WRAP( \
-Logger::get().info("Uninstalling 64 bit direct hook: %s", #name); \
-A64HookFunction((void*)addr, (void*)name, (void**)nullptr); \
-)
-
-#else
-
-#define INSTALL_HOOK(name) MACRO_WRAP( \
-Logger::get().info("Installing 32 bit hook!"); \
-registerInlineHook((uint32_t)getRealOffset(addr_ ## name), (uint32_t)hook_ ## name, (uint32_t **)&name); \
-inlineHook((uint32_t)getRealOffset(addr_ ## name)); \
-)
-
-#define INSTALL_HOOK_OFFSETLESS(name, methodInfo) MACRO_WRAP( \
-Logger::get().info("Installing 32 bit offsetless hook: %s at %lX", #name, asOffset(methodInfo->methodPointer)); \
-registerInlineHook((uint32_t)methodInfo->methodPointer, (uint32_t)hook_ ## name, (uint32_t **)&name); \
-inlineHook((uint32_t)methodInfo->methodPointer); \
-)
-
-#define INSTALL_HOOK_NAT(name) MACRO_WRAP( \
-Logger::get().info("Installing 32 bit native hook!"); \
-registerInlineHook((uint32_t)(addr_ ## name), (uint32_t)hook_ ## name, (uint32_t **)&name); \
-inlineHook((uint32_t)(addr_ ## name)); \
-)
-
-#define INSTALL_HOOK_DIRECT(name, addr) MACRO_WRAP( \
-Logger::get().info("Installing 32 bit offsetless hook!"); \
-registerInlineHook((uint32_t)addr, (uint32_t)hook_ ## name, (uint32_t **)&name); \
-inlineHook((uint32_t)addr); \
-)
-
-#endif /* __aarch64__ */
-
-#else /* SUPPRESS_MACRO_LOGS */
-
-#ifdef __aarch64__
-
-#define INSTALL_HOOK(name) MACRO_WRAP( \
-A64HookFunction((void*)getRealOffset(addr_ ## name),(void*) hook_ ## name, (void**)&name); \
-)
-
-#define INSTALL_HOOK_OFFSETLESS(name, methodInfo) MACRO_WRAP( \
-A64HookFunction((void*)methodInfo->methodPointer,(void*) hook_ ## name, (void**)&name); \
-)
-
-#define INSTALL_HOOK_NAT(name) MACRO_WRAP( \
-A64HookFunction((void*)(addr_ ## name),(void*) hook_ ## name, (void**)&name); \
-)
-
-#define INSTALL_HOOK_DIRECT(name, addr) MACRO_WRAP( \
-A64HookFunction((void*)addr, (void*) hook_ ## name, (void**)&name); \
-)
-
-// Uninstalls currently just creates a hook at the hooked address
-// and sets the hook to call the original function
-// No original trampoline is created when uninstalling a hook, hence the nullptr
-
-#define UNINSTALL_HOOK(name) MACRO_WRAP( \
-A64HookFunction((void*)getRealOffset(addr_ ## name),(void*)name, (void**)nullptr); \
-)
-
-#define UNINSTALL_HOOK_OFFSETLESS(name, methodInfo) MACRO_WRAP( \
-A64HookFunction((void*)methodInfo->methodPointer,(void*)name, (void**)nullptr); \
-)
-
-#define UNINSTALL_HOOK_NAT(name) MACRO_WRAP( \
-A64HookFunction((void*)(addr_ ## name),(void*)name, (void**)nullptr); \
-)
-
-#define UNINSTALL_HOOK_DIRECT(name, addr) MACRO_WRAP( \
-A64HookFunction((void*)addr, (void*)name, (void**)nullptr); \
-)
-
-#else __aarch64__
-
-#define INSTALL_HOOK(name) MACRO_WRAP( \
-registerInlineHook((uint32_t)getRealOffset(addr_ ## name), (uint32_t)hook_ ## name, (uint32_t **)&name); \
-inlineHook((uint32_t)getRealOffset(addr_ ## name)); \
-)
-
-#define INSTALL_HOOK_OFFSETLESS(name, methodInfo) MACRO_WRAP( \
-registerInlineHook((uint32_t)methodInfo->methodPointer, (uint32_t)hook_ ## name, (uint32_t **)&name); \
-inlineHook((uint32_t)methodInfo->methodPointer); \
-)
-
-#define INSTALL_HOOK_NAT(name) MACRO_WRAP( \
-registerInlineHook((uint32_t)(addr_ ## name), (uint32_t)hook_ ## name, (uint32_t **)&name); \
-inlineHook((uint32_t)(addr_ ## name)); \
-)
-
-#define INSTALL_HOOK_DIRECT(name, addr) MACRO_WRAP( \
-registerInlineHook((uint32_t)addr, (uint32_t)hook_ ## name, (uint32_t **)&name); \
-inlineHook((uint32_t)addr); \
-)
-
-#endif /* __aarch64__ */
-
-#endif /* SUPPRESS_MACRO_LOGS */
+// A C# struct
+struct Struct { };
 
 #ifdef __cplusplus
 }
-#endif /* __cplusplus */
+
+template< class T >
+struct is_value_type : std::integral_constant< 
+    bool,
+    std::is_arithmetic<T>::value || std::is_enum<T>::value ||
+    std::is_pointer<T>::value ||
+    std::is_base_of<Struct, T>::value
+> {};
+
+struct ArrayBounds
+{
+    int32_t length;
+    int32_t lower_bound;
+};
+
+template<class T>
+struct Array : public Object
+{
+    static_assert(is_value_type<T>::value, "T must be a C# value type! (primitive, pointer or Struct)");
+    /* bounds is NULL for szarrays */
+    ArrayBounds *bounds;
+    /* total number of elements of the array */
+    int32_t max_length;
+    T values[0];
+
+    int32_t Length() {
+        if (bounds) {
+            return bounds->length;
+        }
+        return max_length;
+    }
+};
+
+// Parses a JSON string, and returns whether it succeeded or not
+bool parsejson(rapidjson::Document& doc, std::string_view js);
+// Parses the JSON of the filename, and returns whether it succeeded or not
+bool parsejsonfile(rapidjson::Document& doc, std::string filename);
+
+extern "C" {
+#endif
+#ifndef MOD_ID
+#error "'MOD_ID' must be defined in the mod!"
+#endif
+#ifndef VERSION
+#error "'VERSION' must be defined in the mod!"
+#endif
+
+long getRealOffset(long offset);
+
+#ifdef log
+#undef log
+#endif
+#define log(...) __android_log_print(ANDROID_LOG_INFO, "QuestHook [" MOD_ID " v" VERSION "] ", __VA_ARGS__)
+
+#define MAKE_HOOK(name, addr, retval, ...) \
+long addr_ ## name = (long) addr; \
+retval (*name)(__VA_ARGS__) = NULL; \
+retval hook_ ## name(__VA_ARGS__) 
+
+#define INSTALL_HOOK(name) \
+registerInlineHook((uint32_t)getRealOffset(addr_ ## name), (uint32_t)hook_ ## name, (uint32_t **)&name);\
+inlineHook((uint32_t)getRealOffset(addr_ ## name));\
+
+
+#define MAKE_HOOK_NAT(name, addr, retval, ...) \
+long addr_ ## name = (long) addr; \
+retval (*name)(__VA_ARGS__) = NULL; \
+retval hook_ ## name(__VA_ARGS__) 
+
+#define INSTALL_HOOK_NAT(name) \
+registerInlineHook((uint32_t)(addr_ ## name), (uint32_t)hook_ ## name, (uint32_t **)&name);\
+inlineHook((uint32_t)(addr_ ## name));\
+
+// C# SPECIFIC
+
+// System.string
+typedef struct {
+    Object object;
+    unsigned int len;
+    unsigned short str[];
+} cs_string;
+
+// BEAT SABER SPECIFIC
+
+// UnityEngine.Color
+typedef struct {
+    float r;
+    float g;
+    float b;
+    float a;
+} Color;
+
+// UnityEngine.Vector2
+typedef struct {
+    float x;
+    float y;
+} Vector2;
+
+// UnityEngine.Vector3
+typedef struct {
+    float x;
+    float y;
+    float z;
+} Vector3;
+
+// OFFSETS
+
+// Create an object using il2cpp_object_new offset
+#define OBJ_CREATOR_OFFSET 0x308740
+// GameObject.ctor() offset
+#define GO_CTOR_OFFSET 0xC86558
+// GameObject type offset
+#define GO_TYPE_OFFSET 0x19C7998
+// System.GetType(string typeName) offset
+#define GET_TYPE_OFFSET 0x104B254
+// System.String.Concat(cs_string* left, cs_string* right) offset
+#define CONCAT_STRING_OFFSET 0x972F2C
+// System.String.CreateString(char* array, int start, int length) offset
+#define CREATE_STRING_OFFSET 0x9831BC
+// System.String.FastAllocateString(int length) offset
+#define ALLOCATE_STRING_OFFSET 0x97A704
+// System.String.Substring(cs_string* this, int start, int length) offset
+#define SUBSTRING_OFFSET 0x96EBEC
+// System.String.Replace(cs_string* original, cs_string* old, cs_string* new) offset
+#define STRING_REPLACE_OFFSET 0x97FF04
+
+// FUNCTIONS
+
+// Sets the unsigned short array of the given cs_string
+void csstrtowstr(cs_string* in, unsigned short* out);
+// Sets the character array of the given cs_string
+void csstrtostr(cs_string* in, char* out);
+// Sets the given cs_string using the given character array and length
+void setcsstr(cs_string* in, char* value, size_t length);
+// Creates a cs string (allocates it) with the given character array and length and returns it
+cs_string* createcsstr(char* characters, size_t length);
+
+// SETTINGS
+
+// ParseError is thrown when failing to parse a JSON file
+typedef enum ParseError {
+    PARSE_ERROR_FILE_DOES_NOT_EXIST = -1
+} ParseError_t;
+
+// WriteError is thrown when failing to create a file
+typedef enum WriteError {
+    WRITE_ERROR_COULD_NOT_MAKE_FILE = -1
+} WriteError_t;
+
+// JSON Parse Errors
+typedef enum JsonParseError {
+    JSON_PARSE_ERROR = -1
+} JsonParseError_t;
+
+// Reads all of the text of a file at the given filename. If the file does not exist, returns NULL
+char* readfile(const char* filename);
+// Writes all of the text to a file at the given filename. Returns either 0 or WriteError code
+int writefile(const char* filename, const char* text);
+
+// CONFIG
+
+#define CONFIG_PATH "/sdcard/Android/data/com.beatgames.beatsaber/files/mods/cfgs/"
+
+#ifdef __cplusplus
+// Returns if a file exists and can be written to / read from.
+bool fileexists(const char* filename);
+}
+#endif
 
 #endif /* UTILS_H_INCLUDED */
