@@ -1,9 +1,10 @@
+#include "../include/mod_interface.hpp"
 #include "../include/main.hpp"
- 
+
 using namespace il2cpp_utils;
- 
+
+static ModInfo modInfo;
 bool MenuSceneLoadedFresh = false;
- 
  
 Vector3 coverPos;
 Vector3 coverScale = {1.0f, 1.0f, 1.0f};
@@ -14,15 +15,8 @@ Vector2 anchoredPosition = {1.5f, 0.0f};
 Rect uvRect = {0.0f, 0.0f, 1.0f, 1.0f};
 Vector3 localPosition = {-1.0f, -52.0f};
 Vector3 newlocalpos = {0.0f, -10.0f};
- 
-Color c{
-    c.r = 0.0f,
-    c.g = 0.0f,
-    c.g = 0.0f,
-    c.a = 0.5f
-};
 
-// All rugt
+ 
 Il2CppObject* FindObjectsOfTypeAllFirstOrDefault(Il2CppReflectionType* Type)
 {
     Array<Il2CppObject*>* Objects = *RunMethod<Array<Il2CppObject*>*>(GetClassFromName("UnityEngine","Resources"), "FindObjectsOfTypeAll", Type);
@@ -32,7 +26,6 @@ Il2CppObject* FindObjectsOfTypeAllFirstOrDefault(Il2CppReflectionType* Type)
         return nullptr;
 }
 
-// All rugt
 MAKE_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, void, Scene previousActiveScene, Scene newActiveScene)
 {  
     Internal_ActiveSceneChanged(previousActiveScene, newActiveScene);
@@ -63,22 +56,21 @@ MAKE_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, void, Scene previousActiveScen
    
 }
  
- 
-// ME POGCHAMP
 MAKE_HOOK_OFFSETLESS(HandleMainMenuViewControllerDidFinish, void, Il2CppObject* self, Il2CppObject* viewController, int subMenuType){
    
     Il2CppObject* sldv = FindObjectsOfTypeAllFirstOrDefault(GetSystemType("", "StandardLevelDetailView"));
  
+
     HandleMainMenuViewControllerDidFinish(self, viewController, subMenuType);
-    if(MenuSceneLoadedFresh == false)
+    if(!MenuSceneLoadedFresh)
         return;
- 
+
     Il2CppObject* cover = *GetFieldValue(sldv, "_coverImage");
     Il2CppObject* bdscc = *GetFieldValue(sldv, "_beatmapDifficultySegmentedControlController");
    
     Il2CppObject* coverTransform = *RunMethod(cover, "get_transform");
     Il2CppObject* parent = *RunMethod(coverTransform, "get_parent");
-   
+
     Il2CppObject* playerStatsContainer = *GetFieldValue(sldv, "_playerStatsContainer");
     Il2CppObject* playerStatsContainerLayout = *RunMethod(playerStatsContainer, "GetComponent", GetSystemType("UnityEngine.UI", "LayoutElement"));
    
@@ -124,11 +116,21 @@ MAKE_HOOK_OFFSETLESS(HandleMainMenuViewControllerDidFinish, void, Il2CppObject* 
     RunMethod(parentLayout, "set_preferredHeight", 60.0f);
     MenuSceneLoadedFresh = false;
 }
+
+extern "C" void setup(ModInfo& info) {
+    info.id = "SongCoverExpander";
+    info.version = "0.1.1";
+    modInfo = info;
+    // Create logger
+    static std::unique_ptr<const Logger> ptr(new Logger(info));
+    logger = ptr.get();
+    logger->info("Completed setup!");
+    // We can even check information specific to the modloader!
+    logger->info("Modloader name: %s", Modloader::getInfo().name.c_str());
+}
  
 extern "C" void load() {
-    log(INFO, "Hello from il2cpp_init!");
-    log(INFO, "Installing hooks...");
+    il2cpp_functions::Init();
     INSTALL_HOOK_OFFSETLESS(HandleMainMenuViewControllerDidFinish, FindMethodUnsafe("", "MainFlowCoordinator", "HandleMainMenuViewControllerDidFinish", 2));
     INSTALL_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, FindMethodUnsafe("UnityEngine.SceneManagement","SceneManager","Internal_ActiveSceneChanged", 2));
-    log(INFO, "Installed all hooks!");
 }
