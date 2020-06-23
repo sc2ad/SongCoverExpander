@@ -1,4 +1,4 @@
-# Quest Counters
+# Song Cover Expander
 
 ## Credits
 
