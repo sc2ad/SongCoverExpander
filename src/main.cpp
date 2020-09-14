@@ -1,5 +1,11 @@
-#include "../include/mod_interface.hpp"
-#include "../include/main.hpp"
+#include <unordered_set>
+
+#include "beatsaber-hook/shared/utils/utils.h"
+#include "beatsaber-hook/shared/utils/logging.hpp"
+#include "modloader/shared/modloader.hpp"
+#include "beatsaber-hook/shared/utils/typedefs.h"
+#include "beatsaber-hook/shared/utils/il2cpp-utils.hpp"
+#include "beatsaber-hook/shared/utils/il2cpp-functions.hpp"
 
 using namespace il2cpp_utils;
 
@@ -50,7 +56,7 @@ MAKE_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, void, Scene previousActiveScen
             MenuSceneLoadedFresh = true;
         } else
         {
-           MenuSceneLoadedFresh = false;
+            MenuSceneLoadedFresh = false;
         }
     }
    
@@ -121,16 +127,10 @@ extern "C" void setup(ModInfo& info) {
     info.id = "SongCoverExpander";
     info.version = "0.1.1";
     modInfo = info;
-    // Create logger
-    static std::unique_ptr<const Logger> ptr(new Logger(info));
-    logger = ptr.get();
-    logger->info("Completed setup!");
-    // We can even check information specific to the modloader!
-    logger->info("Modloader name: %s", Modloader::getInfo().name.c_str());
 }
  
 extern "C" void load() {
     il2cpp_functions::Init();
-    INSTALL_HOOK_OFFSETLESS(HandleMainMenuViewControllerDidFinish, FindMethodUnsafe("", "MainFlowCoordinator", "HandleMainMenuViewControllerDidFinish", 2));
-    INSTALL_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, FindMethodUnsafe("UnityEngine.SceneManagement","SceneManager","Internal_ActiveSceneChanged", 2));
+    INSTALL_HOOK_OFFSETLESS(HandleMainMenuViewControllerDidFinish, il2cpp_utils::FindMethodUnsafe("", "MainFlowCoordinator", "HandleMainMenuViewControllerDidFinish", 2));
+    INSTALL_HOOK_OFFSETLESS(Internal_ActiveSceneChanged, il2cpp_utils::FindMethodUnsafe("UnityEngine.SceneManagement","SceneManager","Internal_ActiveSceneChanged", 2));
 }
