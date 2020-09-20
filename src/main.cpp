@@ -124,8 +124,8 @@ MAKE_HOOK_OFFSETLESS(HandleMainMenuViewControllerDidFinish, void, Il2CppObject* 
 }
 
 extern "C" void setup(ModInfo& info) {
-    info.id = "SongCoverExpander";
-    info.version = "0.1.1";
+    info.id = ID;
+    info.version = VERSION;
     modInfo = info;
 }
  
